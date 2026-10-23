@@ -1,0 +1,31 @@
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const themeButton=$('#theme-toggle');
+function syncTheme(){const dark=document.documentElement.dataset.theme==='dark';themeButton.setAttribute('aria-pressed',String(dark));themeButton.setAttribute('aria-label',dark?'Switch to light theme':'Switch to dark theme');}
+syncTheme();themeButton.addEventListener('click',()=>{const dark=document.documentElement.dataset.theme!=='dark';document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('jamalia-theme',dark?'dark':'light')}catch(e){}syncTheme();});
+const menu=$('#menu-toggle'),nav=$('#site-nav');
+function closeNav(){nav.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.setAttribute('aria-label','Open navigation');}
+menu.addEventListener('click',()=>{const open=!nav.classList.contains('open');nav.classList.toggle('open',open);menu.setAttribute('aria-expanded',String(open));menu.setAttribute('aria-label',open?'Close navigation':'Open navigation');});
+nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{const wasOpen=nav.classList.contains('open');closeNav();if(wasOpen){const target=$(a.getAttribute('href'));target.tabIndex=-1;target.focus({preventScroll:true});}}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&nav.classList.contains('open')){closeNav();menu.focus();}});
+matchMedia('(min-width:601px)').addEventListener('change',e=>{if(e.matches)closeNav();});
+if('IntersectionObserver'in window){const sectionObserver=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){nav.querySelectorAll('a').forEach(a=>{const current=a.getAttribute('href')==='#'+entry.target.id;a.classList.toggle('active',current);if(current)a.setAttribute('aria-current','location');else a.removeAttribute('aria-current');});}})},{rootMargin:'-15% 0px -60% 0px'});['about','research','publications','updates','service'].forEach(id=>sectionObserver.observe($('#'+id)));}
+let topic='all';const papers=$$('.publication');
+function filterPapers(){const query=$('#paper-search').value.trim().toLowerCase(),year=$('#year-filter').value;let count=0;papers.forEach(p=>{const visible=(topic==='all'||p.dataset.category===topic)&&(year==='all'||p.dataset.year===year)&&p.dataset.search.includes(query);p.hidden=!visible;if(visible)count++;});$('#publication-count').textContent=`${count} publication${count===1?'':'s'}`;$('#empty-results').hidden=count>0;}
+function resetFilters(){topic='all';$('#paper-search').value='';$('#year-filter').value='all';$$('[data-filter]').forEach(b=>{b.classList.toggle('active',b.dataset.filter==='all');b.setAttribute('aria-pressed',String(b.dataset.filter==='all'));});filterPapers();}
+$$('[data-filter]').forEach(b=>b.addEventListener('click',()=>{topic=b.dataset.filter;$$('[data-filter]').forEach(other=>{other.classList.toggle('active',other===b);other.setAttribute('aria-pressed',String(other===b));});filterPapers();}));
+$('#paper-search').addEventListener('input',filterPapers);$('#year-filter').addEventListener('change',filterPapers);$('#reset-filters').addEventListener('click',resetFilters);
+$$('a[href^="#pub-"]').forEach(a=>a.addEventListener('click',()=>{const target=$(a.getAttribute('href'));if(target?.hidden)resetFilters();}));
+$$('.copy-citation').forEach(button=>button.addEventListener('click',async()=>{const panel=button.closest('.citation-panel'),text=panel.querySelector('pre').textContent,status=panel.querySelector('.copy-status');try{await navigator.clipboard.writeText(text);status.textContent='Citation copied.';button.textContent='Copied ✓';}catch(e){status.textContent='Clipboard unavailable. Select the citation text to copy it, or download the .bib file.';}}));
+const video=$('#research-video'),motion=$('#motion-toggle'),reduced=matchMedia('(prefers-reduced-motion: reduce)');let userPaused=reduced.matches,videoVisible=false;
+function motionState(){motion.textContent=video.paused?'Play ▷':'Pause Ⅱ';motion.setAttribute('aria-label',video.paused?'Play EgoWaste preview':'Pause EgoWaste preview');}
+function maybePlay(){if(!userPaused&&videoVisible&&!document.hidden&&!$('#media-dialog').open)video.play().catch(motionState);}
+video.addEventListener('play',motionState);video.addEventListener('pause',motionState);
+motion.addEventListener('click',()=>{userPaused=!video.paused;if(userPaused)video.pause();else video.play().catch(motionState);});
+reduced.addEventListener('change',e=>{userPaused=e.matches;if(e.matches)video.pause();else maybePlay();});
+if('IntersectionObserver'in window)new IntersectionObserver(entries=>{videoVisible=entries[0].isIntersecting;if(videoVisible)maybePlay();else video.pause();},{threshold:.2}).observe(video);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)video.pause();else maybePlay();});
+const dialog=$('#media-dialog'),media=$('#dialog-media');let lastMediaButton;
+$$('.media-button').forEach(button=>button.addEventListener('click',()=>{lastMediaButton=button;media.replaceChildren();$('#dialog-title').textContent=button.dataset.title;$('#dialog-caption').textContent=button.dataset.caption;const full=$('#fullsize-link');if(button.dataset.image){const img=document.createElement('img');img.src=button.dataset.image;img.alt=button.dataset.caption;media.append(img);full.hidden=false;full.href=button.dataset.image;}else{const v=document.createElement('video');v.src=button.dataset.video;v.poster=button.dataset.poster;v.controls=true;v.playsInline=true;v.preload='metadata';v.setAttribute('aria-label',button.dataset.title);media.append(v);full.hidden=true;}video.pause();dialog.showModal();document.body.classList.add('dialog-open');$('#dialog-close').focus();}));
+$('#dialog-close').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',e=>{const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
+dialog.addEventListener('close',()=>{media.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});media.replaceChildren();document.body.classList.remove('dialog-open');lastMediaButton?.focus();maybePlay();});
